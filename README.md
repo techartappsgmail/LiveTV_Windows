@@ -2,7 +2,7 @@
 
 A modern Windows desktop application for playing IPTV streams using M3U playlist files.
 
-![.NET](https://img.shields.io/badge/.NET-8.0-blue)
+![.NET](https://img.shields.io/badge/.NET-10.0-blue)
 ![Platform](https://img.shields.io/badge/Platform-Windows-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
@@ -19,7 +19,7 @@ A modern Windows desktop application for playing IPTV streams using M3U playlist
 ## System Requirements
 
 - Windows 10 or later (64-bit)
-- .NET 8.0 Runtime
+- .NET 10.0 Desktop Runtime for framework-dependent builds; not required for self-contained releases
 - 2 GB RAM minimum
 - Hardware video acceleration recommended
 
@@ -27,8 +27,8 @@ A modern Windows desktop application for playing IPTV streams using M3U playlist
 
 ### Prerequisites
 
-1. Install [.NET 8.0 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) (for building)
-2. Or install [.NET 8.0 Runtime](https://dotnet.microsoft.com/download/dotnet/8.0/runtime) (for running only)
+1. Install [.NET 10.0 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) (for building)
+2. Or install the [.NET 10.0 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (for running a framework-dependent build)
 
 ### Build from Source
 
@@ -44,12 +44,23 @@ dotnet build --configuration Release
 dotnet run
 ```
 
-### Create Executable
+### Create Release Builds
 
-```bash
-# Create a self-contained executable
-dotnet publish -c Release -r win-x64 --self-contained true -o ./publish
+```powershell
+.\build-release.ps1
 ```
+
+The script creates self-contained releases for x64 and ARM64 Windows PCs. To build only one architecture, pass `-Runtime win-x64` or `-Runtime win-arm64`.
+
+- `publish/win-x64/` - Use `LiveTV.exe` on Intel and AMD Windows PCs.
+- `publish/win-arm64/` - Use `LiveTV-arm64.exe` on ARM64 Windows PCs without x64 emulation.
+
+Each architecture contains two formats:
+
+- `self-contained/` - Distribute the entire folder and run its architecture-specific executable. This is the most compatible option.
+- `single-file/` - Contains one architecture-specific executable. Native VLC components are extracted to the user's temporary .NET bundle cache when the app starts.
+
+All releases include the .NET runtime, so users do not need to install .NET. Use the native ARM64 release on ARM64 devices because media decoding and graphics behavior can differ under x64 emulation.
 
 ## Usage
 
@@ -146,10 +157,23 @@ IPTV-Windows/
 - **"Error playing channel"** - The stream URL may be invalid or the server is down
 - **Black screen** - Some streams require specific codecs; try a different channel
 - **Buffering** - Check your internet connection speed
+- **ARM64 playback differs from x64** - Use the `win-arm64` release. The `win-x64` release runs through emulation on ARM64, which can behave differently in native VLC decoding and graphics paths.
+- **A stream works on one PC only** - Test both PCs on the same network. Some IPTV services redirect to short-lived CDN URLs tied to the requesting network or IP address.
+- **ARM64 HLS and IPv6** - ARM64 builds resolve dual-stack HTTP(S) `.m3u8` redirects over IPv4 before playback. If the status says `Error playing over IPv4`, the failure is not caused by the stream's IPv6 route.
+
+### Diagnostic Logs
+
+Each run creates a log containing application, architecture, IPv4 routing, playback-state, and native LibVLC diagnostics. Reproduce the playback problem, close the app, and then open the log folder:
+
+```powershell
+explorer.exe "$env:LOCALAPPDATA\LiveTV\Logs"
+```
+
+Share the newest `LiveTV-*.log` file for analysis. Logs are limited to 25 MB, and the app retains the ten newest sessions. The log can contain stream URLs and network addresses, so review it before sharing publicly.
 
 ### Build Issues
 
-- Make sure .NET 8.0 SDK is installed
+- Make sure .NET 10.0 SDK is installed
 - Run `dotnet restore` before building
 - On first run, VLC libraries will be downloaded automatically
 

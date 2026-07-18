@@ -25,6 +25,8 @@ public partial class MainViewModel : ObservableObject
     private readonly EpgService _epgService = new();
     private DispatcherTimer? _epgTimer;
     private CancellationTokenSource? _epgCts;
+    private bool _isUsingIpv4Route;
+    private int _lastLoggedBufferPercent = -1;
 
     [ObservableProperty]
     private ObservableCollection<Channel> _channels = new();
@@ -94,6 +96,7 @@ public partial class MainViewModel : ObservableObject
     public async Task InitializeAsync()
     {
         Debug.WriteLine("[IPTV] Initializing LibVLC...");
+        DiagnosticLog.Info("LibVLC", "Initialization started");
         
         try
         {
@@ -104,6 +107,7 @@ public partial class MainViewModel : ObservableObject
                 Core.Initialize();
                 
                 var vlc = new LibVLC(
+                    enableDebugLogs: true,
                     "--network-caching=3000",
                     "--live-caching=3000",
                     "--file-caching=3000",
@@ -111,6 +115,9 @@ public partial class MainViewModel : ObservableObject
                     "--clock-synchro=0",
                     "--no-video-title-show"
                 );
+                vlc.Log += (_, e) => DiagnosticLog.Info(
+                    $"VLC/{e.Level}",
+                    $"{e.Module}: {e.Message}");
                 
                 var player = new MediaPlayer(vlc);
                 return (vlc, player);
@@ -118,6 +125,7 @@ public partial class MainViewModel : ObservableObject
 
             _libVLC = libVLC;
             _mediaPlayer = mediaPlayer;
+            DiagnosticLog.Info("LibVLC", "LibVLC and MediaPlayer created");
             
             // Setup stats timer for showing download speed
             _statsTimer = new DispatcherTimer
@@ -141,6 +149,7 @@ public partial class MainViewModel : ObservableObject
             // between VLC threads and the UI thread
             _mediaPlayer.Playing += (s, e) => Application.Current.Dispatcher.BeginInvoke(() =>
             {
+                DiagnosticLog.Info("Playback", $"Playing: {CurrentChannel?.Name}; IPv4Route={_isUsingIpv4Route}");
                 IsPlaying = true;
                 HasEverPlayed = true;
                 IsPaused = false;
@@ -153,6 +162,7 @@ public partial class MainViewModel : ObservableObject
             
             _mediaPlayer.Paused += (s, e) => Application.Current.Dispatcher.BeginInvoke(() =>
             {
+                DiagnosticLog.Info("Playback", $"Paused: {CurrentChannel?.Name}");
                 IsPaused = true;
                 PlayPauseIcon = "\uE768";  // Play icon
                 StatusMessage = $"Paused: {CurrentChannel?.Name}";
@@ -161,6 +171,7 @@ public partial class MainViewModel : ObservableObject
             
             _mediaPlayer.Stopped += (s, e) => Application.Current.Dispatcher.BeginInvoke(() =>
             {
+                DiagnosticLog.Info("Playback", $"Stopped: {CurrentChannel?.Name}");
                 IsPlaying = false;
                 IsPaused = false;
                 IsLoading = false;
@@ -170,6 +181,13 @@ public partial class MainViewModel : ObservableObject
             
             _mediaPlayer.Buffering += (s, e) => Application.Current.Dispatcher.BeginInvoke(() =>
             {
+                var bufferPercent = (int)e.Cache;
+                if (bufferPercent == 100 || Math.Abs(bufferPercent - _lastLoggedBufferPercent) >= 10)
+                {
+                    DiagnosticLog.Info("Playback", $"Buffering: {e.Cache:F1}%");
+                    _lastLoggedBufferPercent = bufferPercent;
+                }
+
                 if (e.Cache < 100)
                 {
                     IsLoading = true;
@@ -189,8 +207,11 @@ public partial class MainViewModel : ObservableObject
             _mediaPlayer.EncounteredError += (s, e) => Application.Current.Dispatcher.BeginInvoke(async () =>
             {
                 Debug.WriteLine($"[IPTV] LibVLC Error");
+                DiagnosticLog.Error("Playback", $"LibVLC encountered an error; Channel={CurrentChannel?.Name}; IPv4Route={_isUsingIpv4Route}");
                 IsLoading = false;
-                StatusMessage = $"Error playing: {CurrentChannel?.Name}";
+                StatusMessage = _isUsingIpv4Route
+                    ? $"Error playing over IPv4: {CurrentChannel?.Name}"
+                    : $"Error playing: {CurrentChannel?.Name}";
                 
                 // Try next source automatically after a short delay
                 if (CurrentChannel != null && CurrentChannel.SourceCount > 1)
@@ -205,6 +226,7 @@ public partial class MainViewModel : ObservableObject
             _mediaPlayer.Volume = Volume;
             
             Debug.WriteLine("[IPTV] LibVLC initialization complete");
+            DiagnosticLog.Info("LibVLC", "Initialization completed");
             OnPropertyChanged(nameof(MediaPlayer));
             
             // Auto-load last playlist
@@ -213,6 +235,7 @@ public partial class MainViewModel : ObservableObject
         catch (Exception ex)
         {
             Debug.WriteLine($"[IPTV] LibVLC initialization failed: {ex.Message}");
+            DiagnosticLog.Error("LibVLC", ex);
             StatusMessage = $"Error initializing player: {ex.Message}";
             MessageBox.Show($"Failed to initialize video player:\n{ex.Message}", 
                 "Error", MessageBoxButton.OK, MessageBoxImage.Error);
@@ -237,6 +260,7 @@ public partial class MainViewModel : ObservableObject
     public void Cleanup()
     {
         Debug.WriteLine("[IPTV] Cleanup called");
+        DiagnosticLog.Info("App", "Player cleanup started");
         StopStatsTimer();
         _statsTimer = null;
         _epgTimer?.Stop();
@@ -593,6 +617,9 @@ public partial class MainViewModel : ObservableObject
         Debug.WriteLine($"[IPTV] PlayChannel called: {channel.Name}");
         Debug.WriteLine($"[IPTV] URL: {channel.Url}");
         Debug.WriteLine($"[IPTV] Source {channel.CurrentSourceIndex + 1} of {channel.SourceCount}");
+        DiagnosticLog.Info(
+            "Playback",
+            $"Play requested: Channel={channel.Name}; Source={channel.CurrentSourceIndex + 1}/{channel.SourceCount}; URL={DiagnosticLog.FormatUrl(channel.Url)}");
 
         if (_mediaPlayer == null || _libVLC == null)
         {
@@ -607,22 +634,45 @@ public partial class MainViewModel : ObservableObject
         var sourceInfo = channel.SourceCount > 1 ? $" (Source {channel.CurrentSourceIndex + 1}/{channel.SourceCount})" : "";
         StatusMessage = $"Loading: {channel.Name}{sourceInfo}";
         CurrentChannel = channel;
+        _isUsingIpv4Route = false;
 
         // Push a render frame so WPF paints the loading indicator before Stop() blocks the UI
         await Application.Current.Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Render);
 
         try
         {
+            var playbackUrl = channel.Url;
+            if (Ipv4StreamResolver.ShouldResolve(playbackUrl))
+            {
+                LoadingText = "Resolving IPv4 stream route...";
+                var ipv4Url = await Ipv4StreamResolver.TryResolveRedirectAsync(playbackUrl);
+                if (ipv4Url != null)
+                {
+                    playbackUrl = ipv4Url;
+                    _isUsingIpv4Route = true;
+                    LoadingText = "Connecting over IPv4...";
+                    StatusMessage = $"Loading over IPv4: {channel.Name}{sourceInfo}";
+                    Debug.WriteLine($"[IPTV] Using IPv4 CDN route: {playbackUrl}");
+                    DiagnosticLog.Info("Playback", $"Using IPv4 CDN route: {DiagnosticLog.FormatUrl(playbackUrl)}");
+                }
+                else
+                {
+                    DiagnosticLog.Warning("Playback", "IPv4 preflight did not return a usable redirect; passing the original URL to LibVLC");
+                }
+            }
+
             // Stop must run on UI thread (LibVLC D3D11 surface is thread-bound)
             _mediaPlayer.Stop();
 
             // Create and play media on background thread
             await Task.Run(() =>
             {
-                var media = new Media(_libVLC, channel.Url, FromType.FromLocation);
+                var media = new Media(_libVLC, playbackUrl, FromType.FromLocation);
+                media.StateChanged += (_, e) => DiagnosticLog.Info("Media", $"State={e.State}");
                 Application.Current.Dispatcher.Invoke(() =>
                 {
-                    _mediaPlayer.Play(media);
+                    var accepted = _mediaPlayer.Play(media);
+                    DiagnosticLog.Info("Playback", $"MediaPlayer.Play returned {accepted}");
                 });
             });
             
@@ -634,6 +684,7 @@ public partial class MainViewModel : ObservableObject
         catch (Exception ex)
         {
             Debug.WriteLine($"[IPTV] ERROR: {ex.Message}");
+            DiagnosticLog.Error("Playback", ex);
             StatusMessage = $"Error playing channel: {ex.Message}";
             IsLoading = false;
             
