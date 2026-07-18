@@ -159,7 +159,7 @@ IPTV-Windows/
 - **Buffering** - Check your internet connection speed
 - **ARM64 playback differs from x64** - Use the `win-arm64` release. The `win-x64` release runs through emulation on ARM64, which can behave differently in native VLC decoding and graphics paths.
 - **A stream works on one PC only** - Test both PCs on the same network. Some IPTV services redirect to short-lived CDN URLs tied to the requesting network or IP address.
-- **ARM64 HLS and IPv6** - ARM64 builds resolve dual-stack HTTP(S) `.m3u8` redirects over IPv4 before playback. If the status says `Error playing over IPv4`, the failure is not caused by the stream's IPv6 route.
+- **HLS and IPv6** - Builds resolve dual-stack HTTP(S) `.m3u8` redirects over IPv4 before playback to avoid LibVLC 3 failures with IPv6-literal segment URLs. If the status says `Error playing over IPv4`, the failure is not caused by the stream's IPv6 route.
 
 ### Diagnostic Logs
 

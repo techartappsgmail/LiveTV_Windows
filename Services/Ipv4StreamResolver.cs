@@ -3,7 +3,6 @@ using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
-using System.Runtime.InteropServices;
 
 namespace IPTVPlayer.Services;
 
@@ -11,11 +10,7 @@ public static class Ipv4StreamResolver
 {
     public static bool ShouldResolve(string url)
     {
-        var forceIpv4 = RuntimeInformation.OSArchitecture == Architecture.Arm64 ||
-            string.Equals(Environment.GetEnvironmentVariable("LIVETV_PREFER_IPV4"), "1", StringComparison.Ordinal);
-
-        return forceIpv4 &&
-            Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+        return Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
             (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps) &&
             uri.AbsolutePath.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase);
     }
