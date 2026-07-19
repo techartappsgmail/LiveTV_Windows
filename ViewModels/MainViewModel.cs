@@ -32,12 +32,18 @@ public partial class MainViewModel : ObservableObject
     private ObservableCollection<Channel> _channels = new();
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(NextChannelCommand))]
+    [NotifyCanExecuteChangedFor(nameof(PreviousChannelCommand))]
     private ObservableCollection<Channel> _filteredChannels = new();
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(PlayPauseCommand))]
     private Channel? _selectedChannel;
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(PlayPauseCommand))]
+    [NotifyCanExecuteChangedFor(nameof(StopCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ToggleEpgCommand))]
     private Channel? _currentChannel;
 
     [ObservableProperty]
@@ -51,6 +57,12 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _isLoading;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(PlayPauseCommand))]
+    [NotifyCanExecuteChangedFor(nameof(NextChannelCommand))]
+    [NotifyCanExecuteChangedFor(nameof(PreviousChannelCommand))]
+    private bool _isInitializing;
 
     [ObservableProperty]
     private string _loadingText = "Loading...";
@@ -91,18 +103,23 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private double _epgProgressPercent;
 
+    public bool IsBusy => IsInitializing || IsLoading;
+
     public MediaPlayer? MediaPlayer => _mediaPlayer;
 
     public async Task InitializeAsync()
     {
         Debug.WriteLine("[IPTV] Initializing LibVLC...");
         DiagnosticLog.Info("LibVLC", "Initialization started");
+        var initializationTimer = Stopwatch.StartNew();
+        IsInitializing = true;
+        LoadingText = "Starting video player...";
         
         try
         {
             // Run heavy native library loading AND LibVLC construction on a background thread
             // to keep the UI responsive during startup (LibVLC plugin scanning can take seconds)
-            var (libVLC, mediaPlayer) = await Task.Run(() =>
+            var playerInitializationTask = Task.Run(() =>
             {
                 Core.Initialize();
                 
@@ -122,6 +139,12 @@ public partial class MainViewModel : ObservableObject
                 var player = new MediaPlayer(vlc);
                 return (vlc, player);
             });
+
+            // Playlist parsing does not depend on LibVLC. Starting it now lets the channel
+            // list appear while a first-run native plugin scan continues in the background.
+            _ = LoadLastPlaylistAsync();
+
+            var (libVLC, mediaPlayer) = await playerInitializationTask;
 
             _libVLC = libVLC;
             _mediaPlayer = mediaPlayer;
@@ -226,11 +249,8 @@ public partial class MainViewModel : ObservableObject
             _mediaPlayer.Volume = Volume;
             
             Debug.WriteLine("[IPTV] LibVLC initialization complete");
-            DiagnosticLog.Info("LibVLC", "Initialization completed");
+            DiagnosticLog.Info("LibVLC", $"Initialization completed in {initializationTimer.ElapsedMilliseconds} ms");
             OnPropertyChanged(nameof(MediaPlayer));
-            
-            // Auto-load last playlist
-            LoadLastPlaylistAsync();
         }
         catch (Exception ex)
         {
@@ -240,9 +260,13 @@ public partial class MainViewModel : ObservableObject
             MessageBox.Show($"Failed to initialize video player:\n{ex.Message}", 
                 "Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+        finally
+        {
+            IsInitializing = false;
+        }
     }
 
-    private async void LoadLastPlaylistAsync()
+    private async Task LoadLastPlaylistAsync()
     {
         var lastPath = _settings.Settings.LastPlaylistPath;
         if (!string.IsNullOrEmpty(lastPath))
@@ -376,6 +400,16 @@ public partial class MainViewModel : ObservableObject
     partial void OnSearchTextChanged(string value)
     {
         FilterChannels();
+    }
+
+    partial void OnIsLoadingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsBusy));
+    }
+
+    partial void OnIsInitializingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsBusy));
     }
 
     partial void OnVolumeChanged(int value)
@@ -531,6 +565,8 @@ public partial class MainViewModel : ObservableObject
 
     private async Task LoadPlaylistAsync(string path)
     {
+        var loadTimer = Stopwatch.StartNew();
+
         try
         {
             IsLoading = true;
@@ -581,6 +617,7 @@ public partial class MainViewModel : ObservableObject
             FilterChannels();
 
             StatusMessage = $"Loaded {channels.Count} channels";
+            DiagnosticLog.Info("Playlist", $"Loaded {channels.Count} channels in {loadTimer.ElapsedMilliseconds} ms");
             
             // Save last playlist path
             _settings.Settings.LastPlaylistPath = path;
@@ -601,6 +638,10 @@ public partial class MainViewModel : ObservableObject
         finally
         {
             IsLoading = false;
+            if (IsInitializing)
+            {
+                LoadingText = "Starting video player...";
+            }
         }
     }
 
@@ -727,7 +768,10 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    [RelayCommand]
+    private bool CanPlayPause() =>
+        _mediaPlayer != null && (CurrentChannel != null || SelectedChannel != null);
+
+    [RelayCommand(CanExecute = nameof(CanPlayPause))]
     private void PlayPause()
     {
         if (_mediaPlayer == null)
@@ -751,7 +795,9 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    [RelayCommand]
+    private bool CanStop() => CurrentChannel != null;
+
+    [RelayCommand(CanExecute = nameof(CanStop))]
     private void Stop()
     {
         _mediaPlayer?.Stop();
@@ -773,7 +819,9 @@ public partial class MainViewModel : ObservableObject
         VolumeIcon = IsMuted ? "\uE74F" : (Volume > 50 ? "\uE767" : "\uE993");
     }
 
-    [RelayCommand]
+    private bool CanChangeChannel() => _mediaPlayer != null && FilteredChannels.Count > 0;
+
+    [RelayCommand(CanExecute = nameof(CanChangeChannel))]
     private void NextChannel()
     {
         if (FilteredChannels.Count == 0)
@@ -788,7 +836,7 @@ public partial class MainViewModel : ObservableObject
         PlayChannel(FilteredChannels[nextIndex]);
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanChangeChannel))]
     private void PreviousChannel()
     {
         if (FilteredChannels.Count == 0)
@@ -812,7 +860,9 @@ public partial class MainViewModel : ObservableObject
         // Handled in code-behind for window manipulation
     }
 
-    [RelayCommand]
+    private bool CanToggleEpg() => CurrentChannel != null;
+
+    [RelayCommand(CanExecute = nameof(CanToggleEpg))]
     private void ToggleEpg()
     {
         IsEpgVisible = !IsEpgVisible;

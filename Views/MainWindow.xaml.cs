@@ -259,6 +259,27 @@ public partial class MainWindow : Window
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
         Debug.WriteLine("[IPTV] Window_Loaded fired");
+
+        // Subscribe before startup begins so a fast local playlist can publish its
+        // channels while LibVLC is still performing a cold native plugin scan.
+        _viewModel.PropertyChanged += (s, args) =>
+        {
+            if (args.PropertyName == nameof(MainViewModel.MediaPlayer) && _viewModel.MediaPlayer != null)
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    VideoView.MediaPlayer = _viewModel.MediaPlayer;
+                });
+            }
+            else if (args.PropertyName == nameof(MainViewModel.FilteredChannels))
+            {
+                Dispatcher.BeginInvoke(DispatcherPriority.Background, BuildCircularChannelList);
+            }
+            else if (args.PropertyName == nameof(MainViewModel.SelectedChannel))
+            {
+                Dispatcher.BeginInvoke(DispatcherPriority.Background, SyncWindowSelectedChannel);
+            }
+        };
         
         // Initialize ViewModel (LibVLC loads on background thread)
         await _viewModel.InitializeAsync();
@@ -287,26 +308,6 @@ public partial class MainWindow : Window
                 }));
             };
         }
-        
-        // Track MediaPlayer and channel list property changes
-        _viewModel.PropertyChanged += (s, args) =>
-        {
-            if (args.PropertyName == nameof(MainViewModel.MediaPlayer) && _viewModel.MediaPlayer != null)
-            {
-                Dispatcher.Invoke(() =>
-                {
-                    VideoView.MediaPlayer = _viewModel.MediaPlayer;
-                });
-            }
-            else if (args.PropertyName == nameof(MainViewModel.FilteredChannels))
-            {
-                Dispatcher.BeginInvoke(DispatcherPriority.Background, BuildCircularChannelList);
-            }
-            else if (args.PropertyName == nameof(MainViewModel.SelectedChannel))
-            {
-                Dispatcher.BeginInvoke(DispatcherPriority.Background, SyncWindowSelectedChannel);
-            }
-        };
         
         // Apply saved sidebar position
         ApplySidebarPosition(_settingsService.Settings.ChannelListOnRight);
@@ -1001,6 +1002,7 @@ public partial class MainWindow : Window
         SidebarColumn.Width = new GridLength(0);
         ControlBar.Visibility = Visibility.Collapsed;
         ControlBarRow.Height = new GridLength(0);
+        WindowBorder.BorderThickness = new Thickness(0);
         // Clear the binding and force-close the popup so it stays hidden during fullscreen
         System.Windows.Data.BindingOperations.ClearBinding(EpgPopup, System.Windows.Controls.Primitives.Popup.IsOpenProperty);
         EpgPopup.IsOpen = false;
@@ -1071,6 +1073,7 @@ public partial class MainWindow : Window
         SidebarColumn.Width = new GridLength(200);
         ControlBar.Visibility = Visibility.Visible;
         ControlBarRow.Height = GridLength.Auto;
+        WindowBorder.BorderThickness = new Thickness(1);
         
         // Restore the custom title bar
         if (MainGrid.Parent is Grid outerGrid && outerGrid.RowDefinitions.Count > 0)

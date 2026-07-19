@@ -26,11 +26,15 @@
         <WindowChrome CaptionHeight="48" ResizeBorderThickness="8" GlassFrameThickness="0" CornerRadius="0"/>
     </WindowChrome.WindowChrome>
 
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="48"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
+    <Border x:Name="WindowBorder"
+            BorderBrush="{StaticResource BorderBrush}"
+            BorderThickness="1"
+            Background="Black">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="48"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
 
         <!-- Custom Title Bar -->
         <Grid Grid.Row="0" Background="{StaticResource PrimaryBrush}">
@@ -41,7 +45,7 @@
             </Grid.ColumnDefinitions>
             
             <!-- Title -->
-            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0,0,0">
+            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
                 <Image Source="/Resources/logo.png" Width="44" Height="44" VerticalAlignment="Center" Margin="0,0,6,0" RenderOptions.BitmapScalingMode="HighQuality"/>
                 <TextBlock Text="Live TV" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
             </StackPanel>
@@ -139,13 +143,22 @@
             </Grid.RowDefinitions>
 
             <ListBox Grid.Row="0" x:Name="ChannelList" Style="{StaticResource ChannelListBox}"
-                     ItemContainerStyle="{StaticResource ChannelListBoxItem}"
                      SelectionMode="Multiple"
                      ScrollViewer.VerticalScrollBarVisibility="Hidden" ScrollViewer.PanningMode="VerticalOnly"
-                     ScrollViewer.CanContentScroll="False"
-                     VirtualizingStackPanel.IsVirtualizing="False"
+                     ScrollViewer.CanContentScroll="True"
+                     VirtualizingStackPanel.IsVirtualizing="True"
+                     VirtualizingStackPanel.VirtualizationMode="Recycling"
                      SelectionChanged="ChannelList_SelectionChanged"
                      ScrollViewer.ScrollChanged="ChannelList_ScrollChanged">
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem" BasedOn="{StaticResource ChannelListBoxItem}">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding DataContext.IsInitializing, RelativeSource={RelativeSource AncestorType={x:Type ListBox}}}" Value="True">
+                                <Setter Property="IsEnabled" Value="False"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </ListBox.ItemContainerStyle>
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <Grid>
@@ -209,7 +222,7 @@
                 <Border.Visibility>
                     <MultiBinding Converter="{StaticResource PlayingAndNotLoadingConverter}">
                         <Binding Path="IsPlaying"/>
-                        <Binding Path="IsLoading"/>
+                        <Binding Path="IsBusy"/>
                     </MultiBinding>
                 </Border.Visibility>
                 <vlc:VideoView x:Name="VideoView" MediaPlayer="{Binding MediaPlayer}" Background="Black"/>
@@ -227,7 +240,7 @@
             </Grid>
 
             <!-- Loading/Buffering Overlay -->
-            <Border Background="#CC000000" Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}">
+            <Border Background="#CC000000" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibilityConverter}}">
                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                     <!-- Pulsing dots -->
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,20">
@@ -419,5 +432,6 @@
             </Grid>
         </Border>
     </Grid>
-    </Grid>
+        </Grid>
+    </Border>
 </Window>

@@ -41,6 +41,11 @@
                 <Trigger Property="IsPressed" Value="True">
                     <Setter Property="Background" Value="#60FFFFFF"/>
                 </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Background" Value="Transparent"/>
+                    <Setter Property="Cursor" Value="Arrow"/>
+                    <Setter Property="Opacity" Value="0.35"/>
+                </Trigger>
             </Style.Triggers>
         </Style>
 
@@ -315,26 +320,32 @@
                 </StackPanel>
 
                 <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="20,0" Orientation="Horizontal">
-                    <Button Style="{StaticResource OverlayIconButton}" ToolTip="Previous Source" Command="{Binding TryPreviousSourceCommand}"
-                            Visibility="{Binding CurrentChannel.SourceCount, Converter={StaticResource GreaterThanOneToVisibilityConverter}}" Margin="0,0,12,0">
-                        <TextBlock Text="&#xE76B;" FontFamily="Segoe MDL2 Assets" FontSize="20"/>
-                    </Button>
+                    <StackPanel Orientation="Horizontal"
+                                Visibility="{Binding CurrentChannel, Converter={StaticResource NullToVisibilityConverter}}">
+                        <Button Style="{StaticResource OverlayIconButton}" ToolTip="Previous Source" Command="{Binding TryPreviousSourceCommand}"
+                                Visibility="{Binding CurrentChannel.SourceCount, Converter={StaticResource GreaterThanOneToVisibilityConverter}}" Margin="0,0,12,0">
+                            <TextBlock Text="&#xE76B;" FontFamily="Segoe MDL2 Assets" FontSize="20"/>
+                        </Button>
+                    </StackPanel>
                     <TextBlock Text="{Binding CurrentChannel.Name, FallbackValue='No channel selected'}" Foreground="#FFFFFF" FontSize="20" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="500" VerticalAlignment="Center"/>
-                    <Border BorderBrush="#80FFFFFF" BorderThickness="1" CornerRadius="10" Padding="8,2" Margin="10,0,0,0" VerticalAlignment="Center"
-                            Visibility="{Binding CurrentChannel.SourceCount, Converter={StaticResource GreaterThanOneToVisibilityConverter}}">
-                        <TextBlock Foreground="#80FFFFFF" FontSize="12">
-                            <TextBlock.Text>
-                                <MultiBinding StringFormat="{}{0}/{1}">
-                                    <Binding Path="CurrentChannel.CurrentSourceIndex" Converter="{StaticResource AddOneConverter}"/>
-                                    <Binding Path="CurrentChannel.SourceCount"/>
-                                </MultiBinding>
-                            </TextBlock.Text>
-                        </TextBlock>
-                    </Border>
-                    <Button Style="{StaticResource OverlayIconButton}" ToolTip="Next Source" Command="{Binding TryNextSourceCommand}"
-                            Visibility="{Binding CurrentChannel.SourceCount, Converter={StaticResource GreaterThanOneToVisibilityConverter}}" Margin="12,0,0,0">
-                        <TextBlock Text="&#xE76C;" FontFamily="Segoe MDL2 Assets" FontSize="20"/>
-                    </Button>
+                    <StackPanel Orientation="Horizontal"
+                                Visibility="{Binding CurrentChannel, Converter={StaticResource NullToVisibilityConverter}}">
+                        <Border BorderBrush="#80FFFFFF" BorderThickness="1" CornerRadius="10" Padding="8,2" Margin="10,0,0,0" VerticalAlignment="Center"
+                                Visibility="{Binding CurrentChannel.SourceCount, Converter={StaticResource GreaterThanOneToVisibilityConverter}}">
+                            <TextBlock Foreground="#80FFFFFF" FontSize="12">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="{}{0}/{1}">
+                                        <Binding Path="CurrentChannel.CurrentSourceIndex" Converter="{StaticResource AddOneConverter}"/>
+                                        <Binding Path="CurrentChannel.SourceCount"/>
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                        </Border>
+                        <Button Style="{StaticResource OverlayIconButton}" ToolTip="Next Source" Command="{Binding TryNextSourceCommand}"
+                                Visibility="{Binding CurrentChannel.SourceCount, Converter={StaticResource GreaterThanOneToVisibilityConverter}}" Margin="12,0,0,0">
+                            <TextBlock Text="&#xE76C;" FontFamily="Segoe MDL2 Assets" FontSize="20"/>
+                        </Button>
+                    </StackPanel>
                 </StackPanel>
 
                 <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
