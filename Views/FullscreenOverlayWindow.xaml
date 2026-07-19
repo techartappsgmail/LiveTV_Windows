@@ -212,7 +212,7 @@
                                         <RowDefinition Height="Auto"/>
                                         <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
-                                    <TextBlock Grid.Row="0" Text="{Binding Name}" FontSize="15" Foreground="#FFFFFF" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Grid.Row="0" Text="{Binding Name}" FontSize="17" Foreground="#FFFFFF" TextTrimming="CharacterEllipsis"/>
                                     <TextBlock Grid.Row="1" Text="{Binding Group}" FontSize="12" Foreground="#80FFFFFF" TextTrimming="CharacterEllipsis"
                                                Visibility="{Binding Group, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}"/>
                                 </Grid>

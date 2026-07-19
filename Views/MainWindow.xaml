@@ -188,7 +188,7 @@
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
-                                <TextBlock Grid.Row="0" Text="{Binding Name}" FontSize="15" Foreground="{StaticResource TextBrush}" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Grid.Row="0" Text="{Binding Name}" FontSize="17" Foreground="{StaticResource TextBrush}" TextTrimming="CharacterEllipsis"/>
                                 <TextBlock Grid.Row="1" Text="{Binding Group}" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis"
                                            Visibility="{Binding Group, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}"/>
                             </Grid>

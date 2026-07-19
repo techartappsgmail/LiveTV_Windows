@@ -73,6 +73,9 @@ public partial class MainWindow : Window
     private static extern bool GetClientRect(IntPtr hWnd, out RECT lpRect);
 
     [DllImport("user32.dll")]
+    private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+    [DllImport("user32.dll")]
     private static extern int FillRect(IntPtr hDC, ref RECT lprc, IntPtr hBrush);
 
     [DllImport("gdi32.dll")]
@@ -219,14 +222,29 @@ public partial class MainWindow : Window
         public uint flags;
     }
 
+    private static bool IsWindowResize(IntPtr hwnd, WINDOWPOS position)
+    {
+        if ((position.flags & SWP_NOSIZE) != 0)
+        {
+            return false;
+        }
+
+        return !GetWindowRect(hwnd, out var currentBounds) ||
+               position.cx != currentBounds.Right - currentBounds.Left ||
+               position.cy != currentBounds.Bottom - currentBounds.Top;
+    }
+
     private IntPtr MainWindowWndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         if (msg == (int)WM_WINDOWPOSCHANGING)
         {
             // Add SWP_NOCOPYBITS to prevent the white flash from BitBlt during resize
             var pos = Marshal.PtrToStructure<WINDOWPOS>(lParam);
-            pos.flags |= SWP_NOCOPYBITS;
-            Marshal.StructureToPtr(pos, lParam, false);
+            if (IsWindowResize(hwnd, pos))
+            {
+                pos.flags |= SWP_NOCOPYBITS;
+                Marshal.StructureToPtr(pos, lParam, false);
+            }
         }
         else if (msg == (int)WM_ERASEBKGND)
         {
@@ -530,8 +548,11 @@ public partial class MainWindow : Window
         if (uMsg == WM_WINDOWPOSCHANGING)
         {
             var pos = Marshal.PtrToStructure<WINDOWPOS>(lParam);
-            pos.flags |= SWP_NOCOPYBITS;
-            Marshal.StructureToPtr(pos, lParam, false);
+            if (IsWindowResize(hWnd, pos))
+            {
+                pos.flags |= SWP_NOCOPYBITS;
+                Marshal.StructureToPtr(pos, lParam, false);
+            }
         }
         return DefSubclassProc(hWnd, uMsg, wParam, lParam);
     }
